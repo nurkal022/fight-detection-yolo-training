@@ -1,6 +1,6 @@
 # YOLO Dataset Configuration
 # Путь к датасету (абсолютный или относительный)
-path: /Users/nurlykhan/fight_detect/third_try/other_version/yolo_dataset
+path: /home/nurlykhan/fight-detection-yolo-training/yolo_dataset
 
 # Пути к train и val (относительно path)
 train: images/train

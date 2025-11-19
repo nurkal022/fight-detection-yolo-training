@@ -10,7 +10,7 @@ import os
 # Конфигурация
 MODEL_NAME = 'yolo11n.pt'  # или 'yolo11n-pose.pt' для pose estimation
 DATA_YAML = 'yolo_dataset/data.yaml'
-EPOCHS = 10
+EPOCHS = 100
 IMG_SIZE = 640
 BATCH_SIZE = 16
 PROJECT_NAME = 'fight_detection'
@@ -68,7 +68,7 @@ def train_model():
             save=True,
             plots=True,
             val=True,
-            device='cpu',  # Используем CPU (измените на 0 для GPU если доступен)
+            device='cuda',  # Используем GPU (автоматически выберет доступную)
             workers=MAX_WORKERS,  # Максимальное количество ядер
             optimizer='AdamW',
             lr0=0.001,

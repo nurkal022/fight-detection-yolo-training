@@ -11,8 +11,19 @@ def test_model():
     print("Testing Detection Configuration")
     print("="*60)
     
-    # Load model
-    model_path = 'yolo11n.pt'  # Change to your model path
+    # Load model - try trained model first, fallback to base model
+    import os
+    best_model = 'fight_detection/fight_detection_yolo11n2/weights/best.pt'
+    if os.path.exists(best_model):
+        model_path = best_model
+    else:
+        # Try last.pt
+        last_model = 'fight_detection/fight_detection_yolo11n2/weights/last.pt'
+        if os.path.exists(last_model):
+            model_path = last_model
+        else:
+            model_path = 'yolo11n.pt'
+    
     print(f"\nLoading model: {model_path}")
     
     try:
@@ -53,8 +64,8 @@ def test_model():
         if not ret:
             break
         
-        # Run detection
-        results = model(frame, verbose=False)
+        # Run detection on GPU
+        results = model(frame, verbose=False, device='cuda')
         
         # Get annotated frame
         annotated_frame = results[0].plot()
