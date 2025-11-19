@@ -1,0 +1,54 @@
+{
+  "classes": [
+    {
+      "name": "bent_over",
+      "target": 50,
+      "description": "Наклон вперед, согнутое положение тела"
+    },
+    {
+      "name": "covering_face",
+      "target": 50,
+      "description": "Закрытие лица руками, защитная поза"
+    },
+    {
+      "name": "face_slap",
+      "target": 50,
+      "description": "Удар ладонью по лицу"
+    },
+    {
+      "name": "fist_clenching",
+      "target": 50,
+      "description": "Сжатие кулака, подготовка к удару"
+    },
+    {
+      "name": "hair_clothes_drag",
+      "target": 50,
+      "description": "Таскание за волосы или одежду"
+    },
+    {
+      "name": "head_down",
+      "target": 50,
+      "description": "Опущенная голова, поникшая поза"
+    },
+    {
+      "name": "head_hitting_objects",
+      "target": 50,
+      "description": "Удары головой об объекты, битье головой"
+    },
+    {
+      "name": "head_slap_back",
+      "target": 50,
+      "description": "Удар по затылку, удар сзади по голове"
+    },
+    {
+      "name": "neck_grab",
+      "target": 50,
+      "description": "Захват за шею, удушение"
+    },
+    {
+      "name": "neutral_class",
+      "target": 50,
+      "description": "Нейтральный класс, отсутствие агрессивных действий"
+    }
+  ]
+}

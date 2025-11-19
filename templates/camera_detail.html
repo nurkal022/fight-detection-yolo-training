@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}{{ camera.name }} - Camera Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.live') }}">Live Monitoring</a></li>
+                    <li class="breadcrumb-item active">{{ camera.name }}</li>
+                </ol>
+            </nav>
+            <h1>
+                <i class="fas fa-video"></i> {{ camera.name }}
+                {% if camera.is_active %}
+                <span class="badge bg-success">Active</span>
+                {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+            </h1>
+            <p class="text-muted">
+                <i class="fas fa-map-marker-alt"></i> {{ camera.location }}
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('main.live') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Live
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Video Stream (Left) -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-camera"></i> Live Stream</h5>
+                    <div>
+                        {% if camera.is_active %}
+                        <button class="btn btn-sm btn-danger" id="stop-btn">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                        {% else %}
+                        <button class="btn btn-sm btn-success" id="start-btn">
+                            <i class="fas fa-play"></i> Start
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body p-0 bg-dark">
+                    <div class="video-container" style="position: relative; min-height: 400px;">
+                        {% if camera.is_active %}
+                        <img id="video-stream" 
+                             src="{{ url_for('detection.stream', camera_id=camera.id) }}" 
+                             class="img-fluid w-100"
+                             style="display: block;"
+                             alt="Camera stream">
+                        {% else %}
+                        <div class="text-center text-white p-5">
+                            <i class="fas fa-video-slash fa-5x mb-3 opacity-50"></i>
+                            <p class="lead">Camera not active</p>
+                            <button class="btn btn-success" id="start-btn-center">
+                                <i class="fas fa-play"></i> Start Detection
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Info -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Camera Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Type:</strong> 
+                                <span class="badge bg-primary">{{ camera.source_type }}</span>
+                            </p>
+                            <p><strong>Source:</strong> <code>{{ camera.source }}</code></p>
+                            <p><strong>Location:</strong> {{ camera.location }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Added:</strong> {{ camera.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                            <p><strong>Description:</strong> {{ camera.description or 'N/A' }}</p>
+                            <p><strong>Status:</strong> 
+                                {% if camera.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Statistics -->
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Live Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h3 id="total-frames" class="text-primary">0</h3>
+                            <small class="text-muted">Total Frames</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h3 id="detections-count" class="text-danger">0</h3>
+                            <small class="text-muted">Detections</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h3 id="current-fps" class="text-success">0</h3>
+                            <small class="text-muted">FPS</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h3 id="active-time" class="text-info">0:00</h3>
+                            <small class="text-muted">Active Time</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Detections (Right) -->
+        <div class="col-lg-4">
+            <!-- Current Detection Alert -->
+            <div id="detection-alert" class="alert alert-danger d-none mb-3" role="alert">
+                <h5 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle"></i> Fight Detected!
+                </h5>
+                <p class="mb-0">Confidence: <strong id="detection-confidence">0%</strong></p>
+                <small id="detection-time"></small>
+            </div>
+
+            <!-- Detection Feed -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bell"></i> Real-time Detections
+                        <span class="badge bg-dark" id="detection-badge">0</span>
+                    </h5>
+                </div>
+                <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                    <div id="detection-feed" class="list-group list-group-flush">
+                        <div class="list-group-item text-center text-muted py-4">
+                            <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                            <p>No detections yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events History -->
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-history"></i> Recent Events</h5>
+                </div>
+                <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                    <div class="list-group list-group-flush">
+                        {% if recent_events %}
+                            {% for event in recent_events %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            {% if event.status == 'active' %}
+                                            <span class="badge bg-danger">Active</span>
+                                            {% elif event.status == 'resolved' %}
+                                            <span class="badge bg-success">Resolved</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">{{ event.status }}</span>
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">
+                                            {{ event.start_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <strong>{{ (event.confidence * 100)|round }}%</strong>
+                                        {% if event.duration %}
+                                        <br><small>{{ event.duration|round(1) }}s</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                        <div class="list-group-item text-center text-muted py-4">
+                            <p>No recent events</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container for Notifications -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="liveToast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto" id="toast-title">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toast-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/camera_detail.js') }}"></script>
+{% endblock %}
+
+

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}System Logs - Fight Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-file-alt"></i> System Logs</h1>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('main.logs') }}" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="level" class="form-label">Уровень</label>
+                        <select class="form-select" name="level" id="level">
+                            <option value="">Все</option>
+                            <option value="INFO" {% if request.args.get('level') == 'INFO' %}selected{% endif %}>INFO</option>
+                            <option value="WARNING" {% if request.args.get('level') == 'WARNING' %}selected{% endif %}>WARNING</option>
+                            <option value="ERROR" {% if request.args.get('level') == 'ERROR' %}selected{% endif %}>ERROR</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-filter"></i> Применить
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs Table -->
+<div class="row">
+    <div class="col">
+        <div class="card">
+            <div class="card-body">
+                {% if logs %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Время</th>
+                                <th>Уровень</th>
+                                <th>Модуль</th>
+                                <th>Сообщение</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr class="log-{% if log.level == 'ERROR' %}danger{% elif log.level == 'WARNING' %}warning{% else %}info{% endif %}">
+                                <td style="white-space: nowrap;">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    <span class="badge bg-{% if log.level == 'ERROR' %}danger{% elif log.level == 'WARNING' %}warning{% else %}info{% endif %}">
+                                        {{ log.level }}
+                                    </span>
+                                </td>
+                                <td><code>{{ log.module or '-' }}</code></td>
+                                <td>{{ log.message }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if pagination.pages > 1 %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('main.logs', page=pagination.prev_num, **request.args) }}">Previous</a>
+                        </li>
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('main.logs', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('main.logs', page=pagination.next_num, **request.args) }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+                
+                {% else %}
+                <p class="text-muted text-center py-4">Логи не найдены</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

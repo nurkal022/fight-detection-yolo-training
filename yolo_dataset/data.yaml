@@ -1,0 +1,22 @@
+# YOLO Dataset Configuration
+# Путь к датасету (абсолютный или относительный)
+path: /Users/nurlykhan/fight_detect/third_try/other_version/yolo_dataset
+
+# Пути к train и val (относительно path)
+train: images/train
+val: images/val
+
+# Количество классов
+nc: 9
+
+# Имена классов
+names:
+  0: bent_over
+  1: covering_face
+  2: face_slap
+  3: fist_clenching
+  4: hair_clothes_drag
+  5: head_down
+  6: head_slap_back
+  7: neck_grab
+  8: neutral_class

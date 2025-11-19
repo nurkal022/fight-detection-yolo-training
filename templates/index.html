@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Fight Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4" id="stats-cards">
+    <div class="col-md-3">
+        <div class="card stats-card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Всего камер</h6>
+                        <h2 class="mb-0" id="total-cameras">-</h2>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="fas fa-camera fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card stats-card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Активных камер</h6>
+                        <h2 class="mb-0" id="active-cameras">-</h2>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="fas fa-video fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card stats-card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">События за 24ч</h6>
+                        <h2 class="mb-0" id="events-24h">-</h2>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="fas fa-exclamation-triangle fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card stats-card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Всего событий</h6>
+                        <h2 class="mb-0" id="total-events">-</h2>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="fas fa-database fa-3x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Events -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-clock"></i> Последние события</h5>
+            </div>
+            <div class="card-body">
+                <div id="recent-events-list">
+                    <p class="text-muted text-center py-4">Загрузка...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-bell"></i> Активные оповещения</h5>
+            </div>
+            <div class="card-body">
+                <div id="active-alerts">
+                    <p class="text-muted text-center py-4">Нет активных оповещений</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-server"></i> Состояние системы</h5>
+            </div>
+            <div class="card-body">
+                <div id="system-status-details">
+                    <p class="text-muted text-center py-4">Загрузка...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
+

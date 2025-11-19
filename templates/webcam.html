@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Webcam Launch - Fight Detection System{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <!-- Header -->
+    <div class="row mb-5">
+        <div class="col-md-12 text-center">
+            <h1 class="display-4">
+                <i class="fas fa-camera fa-2x text-primary mb-3"></i>
+                <br>
+                Запуск Веб-Камеры
+            </h1>
+            <p class="lead text-muted">
+                Быстрый запуск детекции драк через веб-камеру
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-6">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white text-center py-4">
+                    <h3 class="mb-0">
+                        <i class="fas fa-video"></i> Настройка Веб-Камеры
+                    </h3>
+                </div>
+                <div class="card-body p-5">
+                    <!-- Step 1: Check Available Cameras -->
+                    <div class="mb-4">
+                        <h5 class="mb-3">
+                            <span class="badge bg-primary rounded-circle me-2">1</span>
+                            Проверьте доступные камеры
+                        </h5>
+                        <button class="btn btn-outline-primary btn-lg w-100" id="check-cameras-btn">
+                            <i class="fas fa-search me-2"></i> Найти доступные камеры
+                        </button>
+                        <div id="camera-check-result" class="mt-3"></div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Step 2: Select Camera -->
+                    <div class="mb-4">
+                        <h5 class="mb-3">
+                            <span class="badge bg-primary rounded-circle me-2">2</span>
+                            Выберите камеру
+                        </h5>
+                        <div class="mb-3">
+                            <label for="camera-index" class="form-label fw-bold">
+                                Индекс камеры
+                            </label>
+                            <select class="form-select form-select-lg" id="camera-index">
+                                <option value="0" selected>Камера 0 (основная)</option>
+                                <option value="1">Камера 1</option>
+                                <option value="2">Камера 2</option>
+                            </select>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle"></i>
+                                Обычно 0 - встроенная камера ноутбука
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="camera-name" class="form-label fw-bold">
+                                Название камеры
+                            </label>
+                            <input type="text" 
+                                   class="form-control form-control-lg" 
+                                   id="camera-name" 
+                                   value="Веб-камера"
+                                   placeholder="Введите название">
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Step 3: Launch -->
+                    <div class="mb-3">
+                        <h5 class="mb-3">
+                            <span class="badge bg-primary rounded-circle me-2">3</span>
+                            Запустите детекцию
+                        </h5>
+                        <button class="btn btn-success btn-lg w-100 py-3" id="launch-btn">
+                            <i class="fas fa-play-circle fa-lg me-2"></i>
+                            Запустить Детекцию
+                        </button>
+                    </div>
+
+                    <!-- Status Messages -->
+                    <div id="status-messages" class="mt-4"></div>
+                </div>
+            </div>
+
+            <!-- Info Card -->
+            <div class="card mt-4 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-lightbulb"></i> Полезная информация
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold">Что делает эта страница?</h6>
+                    <ul class="mb-3">
+                        <li>Проверяет доступные веб-камеры</li>
+                        <li>Автоматически создает камеру в системе</li>
+                        <li>Запускает детекцию драк в реальном времени</li>
+                        <li>Перенаправляет на страницу камеры для мониторинга</li>
+                    </ul>
+
+                    <h6 class="fw-bold mt-3">Возможные проблемы:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Камера не найдена:</strong> Проверьте разрешения (Settings → Privacy → Camera)</li>
+                        <li><strong>Камера занята:</strong> Закройте Zoom, Skype и другие приложения</li>
+                        <li><strong>Не читает кадры:</strong> Попробуйте другой индекс камеры</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="text-center mt-4">
+                <a href="{{ url_for('main.live') }}" class="btn btn-outline-secondary me-2">
+                    <i class="fas fa-arrow-left"></i> Назад к Live Monitoring
+                </a>
+                <a href="{{ url_for('main.settings') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-cog"></i> Настройки
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5 id="loading-message">Запуск камеры...</h5>
+                <p class="text-muted mb-0" id="loading-detail">Пожалуйста, подождите</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/webcam.js') }}"></script>
+{% endblock %}
+

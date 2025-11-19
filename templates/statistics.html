@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics - Fight Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-chart-bar"></i> Statistics</h1>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stats-card bg-primary text-white">
+            <div class="card-body">
+                <h6 class="card-title">Всего событий</h6>
+                <h2 class="mb-0">{{ total_events }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-warning text-white">
+            <div class="card-body">
+                <h6 class="card-title">За последние 24 часа</h6>
+                <h2 class="mb-0">{{ events_24h }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-info text-white">
+            <div class="card-body">
+                <h6 class="card-title">Средняя уверенность</h6>
+                <h2 class="mb-0">{{ (avg_confidence * 100)|int }}%</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">Средняя длительность</h6>
+                <h2 class="mb-0">{{ "%.1f"|format(avg_duration) }}s</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">События по камерам</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="eventsByCameraChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">События по часам (24ч)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="eventsByHourChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Events by camera chart
+const eventsByCameraCtx = document.getElementById('eventsByCameraChart').getContext('2d');
+const eventsByCameraData = {
+    labels: [{% for camera, count in events_by_camera %}'{{ camera }}',{% endfor %}],
+    datasets: [{
+        label: 'События',
+        data: [{% for camera, count in events_by_camera %}{{ count }},{% endfor %}],
+        backgroundColor: [
+            'rgba(255, 99, 132, 0.5)',
+            'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 206, 86, 0.5)',
+            'rgba(75, 192, 192, 0.5)',
+            'rgba(153, 102, 255, 0.5)',
+        ],
+        borderColor: [
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+        ],
+        borderWidth: 1
+    }]
+};
+
+new Chart(eventsByCameraCtx, {
+    type: 'bar',
+    data: eventsByCameraData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    precision: 0
+                }
+            }
+        }
+    }
+});
+
+// Events by hour chart
+const eventsByHourCtx = document.getElementById('eventsByHourChart').getContext('2d');
+const hours = Array.from({length: 24}, (_, i) => i.toString().padStart(2, '0'));
+const eventCounts = new Array(24).fill(0);
+
+{% for hour, count in events_by_hour %}
+eventCounts[parseInt('{{ hour }}')] = {{ count }};
+{% endfor %}
+
+const eventsByHourData = {
+    labels: hours.map(h => h + ':00'),
+    datasets: [{
+        label: 'События',
+        data: eventCounts,
+        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1,
+        fill: true
+    }]
+};
+
+new Chart(eventsByHourCtx, {
+    type: 'line',
+    data: eventsByHourData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    precision: 0
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}
+

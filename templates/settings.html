@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Fight Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-cog"></i> Settings</h1>
+    </div>
+</div>
+
+<!-- Camera Management -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-camera"></i> Управление камерами</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+                    <i class="fas fa-plus"></i> Добавить камеру
+                </button>
+            </div>
+            <div class="card-body">
+                {% if cameras %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Название</th>
+                                <th>Источник</th>
+                                <th>Тип</th>
+                                <th>Местоположение</th>
+                                <th>Confidence</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for camera in cameras %}
+                            <tr data-camera-id="{{ camera.id }}">
+                                <td>{{ camera.id }}</td>
+                                <td>{{ camera.name }}</td>
+                                <td><code>{{ camera.source }}</code></td>
+                                <td><span class="badge bg-secondary">{{ camera.source_type }}</span></td>
+                                <td>{{ camera.location or '-' }}</td>
+                                <td>{{ (camera.confidence_threshold * 100)|int }}%</td>
+                                <td>
+                                    <span class="badge bg-{% if camera.is_active %}success{% else %}secondary{% endif %}">
+                                        {% if camera.is_active %}Активна{% else %}Неактивна{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button class="btn btn-warning btn-edit-camera" data-camera-id="{{ camera.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-delete-camera" data-camera-id="{{ camera.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">Камеры не настроены</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Settings -->
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Настройки системы</h5>
+            </div>
+            <div class="card-body">
+                <form id="system-settings-form">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="confidence_threshold" class="form-label">Порог уверенности (по умолчанию)</label>
+                            <input type="range" class="form-range" id="confidence_threshold" min="0.1" max="1.0" step="0.05" value="0.5">
+                            <small class="text-muted">Текущее значение: <span id="confidence_value">50</span>%</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="event_cooldown" class="form-label">Cooldown между событиями (сек)</label>
+                            <input type="number" class="form-control" id="event_cooldown" value="5" min="1" max="60">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="min_duration" class="form-label">Минимальная длительность события (сек)</label>
+                            <input type="number" class="form-control" id="min_duration" value="1" min="0.5" max="10" step="0.5">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="save_clips" class="form-label">Сохранять видео фрагменты</label>
+                            <select class="form-select" id="save_clips">
+                                <option value="true" selected>Да</option>
+                                <option value="false">Нет</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Сохранить настройки
+                            </button>
+                            <button type="button" class="btn btn-outline-success ms-2" id="send-test-telegram">
+                                <i class="fab fa-telegram"></i> Отправить тест в Telegram
+                            </button>
+                            <button type="button" class="btn btn-outline-primary ms-2" id="send-test-detection">
+                                <i class="fas fa-search"></i> Тестовая детекция с изображением
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Camera Modal -->
+<div class="modal fade" id="addCameraModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить камеру</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-camera-form">
+                    <div class="mb-3">
+                        <label for="camera_name" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="camera_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="camera_source_type" class="form-label">Тип источника *</label>
+                        <select class="form-select" id="camera_source_type" required>
+                            <option value="webcam">Веб-камера</option>
+                            <option value="rtsp">RTSP поток</option>
+                            <option value="file">Видео файл</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="camera_source" class="form-label">Источник *</label>
+                        <input type="text" class="form-control" id="camera_source" 
+                               placeholder="0 (для веб-камеры) или rtsp://..." required>
+                        <small class="text-muted">Для веб-камеры: 0, 1, 2... Для RTSP: rtsp://...</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="camera_location" class="form-label">Местоположение</label>
+                        <input type="text" class="form-control" id="camera_location" placeholder="Офис, зал и т.д.">
+                    </div>
+                    <div class="mb-3">
+                        <label for="camera_confidence" class="form-label">Порог уверенности</label>
+                        <input type="range" class="form-range" id="camera_confidence" min="0.1" max="1.0" step="0.05" value="0.5">
+                        <small class="text-muted">Значение: <span id="camera_confidence_value">50</span>%</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="save-camera-btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Camera Modal -->
+<div class="modal fade" id="editCameraModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать камеру</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-camera-form">
+                    <input type="hidden" id="edit_camera_id">
+                    <div class="mb-3">
+                        <label for="edit_camera_name" class="form-label">Название *</label>
+                        <input type="text" class="form-control" id="edit_camera_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_camera_source_type" class="form-label">Тип источника *</label>
+                        <select class="form-select" id="edit_camera_source_type" required>
+                            <option value="webcam">Веб-камера</option>
+                            <option value="rtsp">RTSP поток</option>
+                            <option value="file">Видео файл</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_camera_source" class="form-label">Источник *</label>
+                        <input type="text" class="form-control" id="edit_camera_source" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_camera_location" class="form-label">Местоположение</label>
+                        <input type="text" class="form-control" id="edit_camera_location">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_camera_confidence" class="form-label">Порог уверенности</label>
+                        <input type="range" class="form-range" id="edit_camera_confidence" min="0.1" max="1.0" step="0.05" value="0.5">
+                        <small class="text-muted">Значение: <span id="edit_camera_confidence_value">50</span>%</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="update-camera-btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}
+

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Live Monitoring - Fight Detection System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1><i class="fas fa-video"></i> Live Monitoring</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('main.webcam') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-camera"></i> Запуск Веб-Камеры
+        </a>
+    </div>
+</div>
+
+
+<!-- Camera Grid -->
+{% if cameras %}
+<div class="row" id="camera-grid">
+    {% for camera in cameras %}
+    <div class="col-lg-6 col-xl-4 mb-4" data-camera-id="{{ camera.id }}">
+        <div class="card camera-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-camera"></i> {{ camera.name }}
+                </h5>
+                <div class="btn-group btn-group-sm" role="group">
+                    <a href="{{ url_for('main.camera_detail', camera_id=camera.id) }}" 
+                       class="btn btn-info" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <button class="btn btn-success btn-start" data-camera-id="{{ camera.id }}" 
+                            {% if camera.is_active %}style="display:none;"{% endif %}>
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button class="btn btn-danger btn-stop" data-camera-id="{{ camera.id }}"
+                            {% if not camera.is_active %}style="display:none;"{% endif %}>
+                        <i class="fas fa-stop"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="video-container">
+                    <img src="{{ url_for('detection.stream', camera_id=camera.id) }}" 
+                         class="camera-stream" 
+                         alt="{{ camera.name }}"
+                         onerror="this.src='{{ url_for('static', filename='images/no-signal.png') }}'"
+                         {% if not camera.is_active %}style="display:none;"{% endif %}>
+                    <div class="no-stream {% if camera.is_active %}d-none{% endif %}">
+                        <i class="fas fa-video-slash fa-4x text-muted"></i>
+                        <p class="mt-3 text-muted">Камера не активна</p>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <i class="fas fa-map-marker-alt"></i> 
+                        {{ camera.location or 'Местоположение не указано' }}
+                    </small>
+                    <span class="badge bg-{% if camera.is_active %}success{% else %}secondary{% endif %} camera-status">
+                        {% if camera.is_active %}Активна{% else %}Неактивна{% endif %}
+                    </span>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="fas fa-chart-line"></i> 
+                        Confidence: {{ (camera.confidence_threshold * 100)|int }}%
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="row">
+    <div class="col">
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle fa-3x mb-3"></i>
+            <h4>Камеры не настроены</h4>
+            <p>Добавьте камеры в разделе <a href="{{ url_for('main.settings') }}">Настройки</a></p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Event Toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="event-toast" class="toast" role="alert">
+        <div class="toast-header bg-danger text-white">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong class="me-auto">Обнаружена драка!</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            <span id="event-toast-message"></span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/live.js') }}"></script>
+{% endblock %}
+

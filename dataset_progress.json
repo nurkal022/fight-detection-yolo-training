@@ -1,0 +1,44 @@
+{
+  "classes": {
+    "bent_over": {
+      "target": 50,
+      "collected": 50
+    },
+    "covering_face": {
+      "target": 50,
+      "collected": 50
+    },
+    "face_slap": {
+      "target": 50,
+      "collected": 50
+    },
+    "fist_clenching": {
+      "target": 50,
+      "collected": 50
+    },
+    "hair_clothes_drag": {
+      "target": 50,
+      "collected": 50
+    },
+    "head_down": {
+      "target": 50,
+      "collected": 37
+    },
+    "head_hitting_objects": {
+      "target": 50,
+      "collected": 0
+    },
+    "head_slap_back": {
+      "target": 50,
+      "collected": 50
+    },
+    "neck_grab": {
+      "target": 50,
+      "collected": 50
+    },
+    "neutral_class": {
+      "target": 50,
+      "collected": 50
+    }
+  }
+}
