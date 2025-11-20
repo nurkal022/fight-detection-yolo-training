@@ -120,44 +120,44 @@ def handle_detection_event(event_data):
         # Telegram notification (if enabled and meets alert criteria) - ASYNC in separate thread
         # This prevents blocking the detection thread
         def send_telegram_notification():
-        try:
-            with current_app.app_context():  # Need app context for Flask config
-            notifier = TelegramNotifier()
-            if notifier.is_ready():
-                camera_name = event.camera.name if event.camera else f"Camera {camera_id}"
-                caption = (
-                    f"<b>🚨 Fight Detection Alert</b>\n"
-                    f"📹 Camera: {camera_name}\n"
-                    f"👊 Detected: <b>{event.detected_class}</b>\n"
-                    f"📊 Confidence: {int(event.confidence*100)}%\n"
-                    f"⏱ Duration: {duration:.1f}s\n"
-                    f"🔢 Detections: {detection_count}\n"
-                    f"🕐 Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
-                )
-                sent = False
-                if event.frame_path:
-                    photo_fs_path = os.path.join('app/static', event.frame_path)
-                    if os.path.exists(photo_fs_path):
-                        # Send to multiple chat IDs if configured
-                        chat_ids_str = current_app.config.get('TELEGRAM_CHAT_ID', '')
-                        if ',' in chat_ids_str:
-                            chat_ids = [cid.strip() for cid in chat_ids_str.split(',')]
-                            results = notifier.send_photo_to_multiple(photo_fs_path, chat_ids, caption)
-                            sent = results['success'] > 0
-                            log_system('INFO', f'Telegram sent to {results["success"]}/{len(chat_ids)} chats', 'detection')
-                        else:
-                            sent = notifier.send_photo(photo_fs_path, caption)
-                if not sent:
-                    # Fallback to text message
-                    chat_ids_str = current_app.config.get('TELEGRAM_CHAT_ID', '')
-                    if ',' in chat_ids_str:
-                        chat_ids = [cid.strip() for cid in chat_ids_str.split(',')]
-                        results = notifier.send_message_to_multiple(caption, chat_ids)
-                        log_system('INFO', f'Telegram text sent to {results["success"]}/{len(chat_ids)} chats', 'detection')
-                    else:
-                        notifier.send_message(caption)
-        except Exception as e:
-            log_system('ERROR', f'Telegram notify error: {str(e)}', 'detection')
+            try:
+                with current_app.app_context():  # Need app context for Flask config
+                    notifier = TelegramNotifier()
+                    if notifier.is_ready():
+                        camera_name = event.camera.name if event.camera else f"Camera {camera_id}"
+                        caption = (
+                            f"<b>🚨 Fight Detection Alert</b>\n"
+                            f"📹 Camera: {camera_name}\n"
+                            f"👊 Detected: <b>{event.detected_class}</b>\n"
+                            f"📊 Confidence: {int(event.confidence*100)}%\n"
+                            f"⏱ Duration: {duration:.1f}s\n"
+                            f"🔢 Detections: {detection_count}\n"
+                            f"🕐 Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+                        )
+                        sent = False
+                        if event.frame_path:
+                            photo_fs_path = os.path.join('app/static', event.frame_path)
+                            if os.path.exists(photo_fs_path):
+                                # Send to multiple chat IDs if configured
+                                chat_ids_str = current_app.config.get('TELEGRAM_CHAT_ID', '')
+                                if ',' in chat_ids_str:
+                                    chat_ids = [cid.strip() for cid in chat_ids_str.split(',')]
+                                    results = notifier.send_photo_to_multiple(photo_fs_path, chat_ids, caption)
+                                    sent = results['success'] > 0
+                                    log_system('INFO', f'Telegram sent to {results["success"]}/{len(chat_ids)} chats', 'detection')
+                                else:
+                                    sent = notifier.send_photo(photo_fs_path, caption)
+                        if not sent:
+                            # Fallback to text message
+                            chat_ids_str = current_app.config.get('TELEGRAM_CHAT_ID', '')
+                            if ',' in chat_ids_str:
+                                chat_ids = [cid.strip() for cid in chat_ids_str.split(',')]
+                                results = notifier.send_message_to_multiple(caption, chat_ids)
+                                log_system('INFO', f'Telegram text sent to {results["success"]}/{len(chat_ids)} chats', 'detection')
+                            else:
+                                notifier.send_message(caption)
+            except Exception as e:
+                log_system('ERROR', f'Telegram notify error: {str(e)}', 'detection')
         
         # Start Telegram notification in background thread (non-blocking)
         telegram_thread = threading.Thread(target=send_telegram_notification, daemon=True)
@@ -167,19 +167,27 @@ def handle_detection_event(event_data):
         log_system('ERROR', f'Error handling detection event: {str(e)}', 'detection')
 
 
-def generate_stream(camera_id):
+def generate_stream(camera_id, det=None):
     """
     Generate video stream for a camera.
     
     Args:
         camera_id: Camera ID to stream
+        det: Detector instance (passed from route handler to avoid context issues)
         
     Yields:
         JPEG frames as multipart response
     """
     import time
     import numpy as np
-    det = get_detector()
+    
+    # Use passed detector or try to get global one
+    if det is None:
+        global detector
+        if detector is None:
+            log_system('ERROR', 'Detector not available for stream', 'detection')
+            return
+        det = detector
     
     log_system('INFO', f'Starting stream generation for camera {camera_id}', 'detection')
     frame_count = 0
@@ -198,9 +206,9 @@ def generate_stream(camera_id):
                 no_frame_count += 1
                 # If no frame for too long, send black frame
                 if no_frame_count > 30:  # ~1 second at 30 FPS
-                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                        cv2.putText(frame, 'No signal', (200, 240), 
-                                  cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(frame, 'No signal', (200, 240), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                 else:
                     time.sleep(frame_time)
                     continue
@@ -245,8 +253,19 @@ def stream(camera_id):
     Args:
         camera_id: Camera ID to stream
     """
+    # Get detector inside route handler (has app context)
+    # Pass it to generator to avoid context issues
+    try:
+        det = get_detector()
+    except Exception as e:
+        log_system('ERROR', f'Failed to get detector for stream: {str(e)}', 'detection')
+        return Response(
+            b'--frame\r\nContent-Type: image/jpeg\r\n\r\n',
+            mimetype='multipart/x-mixed-replace; boundary=frame'
+        ), 500
+    
     return Response(
-        generate_stream(camera_id),
+        generate_stream(camera_id, det),
         mimetype='multipart/x-mixed-replace; boundary=frame',
         headers={
             'Cache-Control': 'no-cache, no-store, must-revalidate, private',
@@ -340,14 +359,45 @@ def get_stats():
         det = get_detector()
         stats = det.get_all_stats()
         
+        # Ensure stats has required structure
+        if not isinstance(stats, dict):
+            stats = {}
+        
+        # Ensure event_stats exists
+        if 'event_stats' not in stats or stats['event_stats'] is None:
+            stats['event_stats'] = {
+                'active_events': 0,
+                'cameras_with_history': 0,
+                'active_cameras': []
+            }
+        
+        # Ensure streams is a list
+        if 'streams' not in stats or stats['streams'] is None:
+            stats['streams'] = []
+        
+        # Ensure active_streams exists
+        if 'active_streams' not in stats:
+            stats['active_streams'] = len(stats.get('streams', []))
+        
         return jsonify({
             'success': True,
             'stats': stats
         })
     except Exception as e:
+        import traceback
+        log_system('ERROR', f'Error getting stats: {str(e)}\n{traceback.format_exc()}', 'detection')
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': str(e),
+            'stats': {
+                'active_streams': 0,
+                'streams': [],
+                'event_stats': {
+                    'active_events': 0,
+                    'cameras_with_history': 0,
+                    'active_cameras': []
+                }
+            }
         }), 500
 
 

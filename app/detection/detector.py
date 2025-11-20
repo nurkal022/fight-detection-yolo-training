@@ -414,8 +414,8 @@ class UniversalDetector:
             
             # Update frame buffer immediately with lock for thread safety
             with self.frame_buffer_locks[camera_id]:
-            self.frame_buffers[camera_id] = display_frame
-            self.frame_timestamps[camera_id] = time.time()
+                self.frame_buffers[camera_id] = display_frame
+                self.frame_timestamps[camera_id] = time.time()
             
             # Run detection in background (non-blocking for frame updates)
             try:
@@ -449,8 +449,8 @@ class UniversalDetector:
                     display_frame_with_detections = self._draw_detections_safe(latest_original, scaled_detections)
                     
                     with self.frame_buffer_locks[camera_id]:
-                    self.frame_buffers[camera_id] = display_frame_with_detections
-                    self.frame_timestamps[camera_id] = time.time()
+                        self.frame_buffers[camera_id] = display_frame_with_detections
+                        self.frame_timestamps[camera_id] = time.time()
                 else:
                     # No detections - clear saved detections
                     if camera_id in self.last_detections:
@@ -482,8 +482,8 @@ class UniversalDetector:
                 log_system('ERROR', f'Traceback: {traceback.format_exc()}', 'detector')
                 # On error, still update frame buffer with original frame
                 with self.frame_buffer_locks[camera_id]:
-                self.frame_buffers[camera_id] = frame
-                self.frame_timestamps[camera_id] = time.time()
+                    self.frame_buffers[camera_id] = frame
+                    self.frame_timestamps[camera_id] = time.time()
                 time.sleep(0.001)
             
             # Minimal delay to prevent CPU overload but maintain smooth FPS
@@ -565,10 +565,10 @@ class UniversalDetector:
         try:
             # Get frame with lock - copy immediately to minimize lock time
             with self.frame_buffer_locks[camera_id]:
-            frame = self.frame_buffers.get(camera_id)
-            if frame is not None:
+                frame = self.frame_buffers.get(camera_id)
+                if frame is not None:
                     # Copy immediately while holding lock (fast operation)
-                return frame.copy()
+                    return frame.copy()
             return None
         except Exception as e:
             # Return None on any error to prevent blocking

@@ -7,7 +7,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Model configuration - Trained fight detection model
-    MODEL_PATH = os.environ.get('MODEL_PATH', 'fight_detection/fight_detection_yolo11n2/weights/best.pt')
+    # Use absolute path to avoid conflicts with app2
+    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _DEFAULT_MODEL = os.path.join(_BASE_DIR, 'fight_detection/fight_detection_yolo11n2/weights/best.pt')
+    MODEL_PATH = os.environ.get('MODEL_PATH', _DEFAULT_MODEL)
     CONFIDENCE_THRESHOLD = 0.65  # Increased to reduce false positives
     
     # Detection classes - Exclude neutral_class (8) from detection

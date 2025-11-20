@@ -67,32 +67,39 @@ async function loadSystemStatus() {
     try {
         const data = await window.app.apiRequest('/detection/stats');
         
-        if (data.success) {
+        if (data.success && data.stats) {
             const container = document.getElementById('system-status-details');
             const stats = data.stats;
+            
+            // Safely get event stats with defaults
+            const eventStats = stats.event_stats || {};
+            const activeEvents = eventStats.active_events || 0;
+            const camerasWithHistory = eventStats.cameras_with_history || 0;
+            const activeStreams = stats.active_streams || 0;
+            const streams = stats.streams || [];
             
             container.innerHTML = `
                 <div class="row">
                     <div class="col-md-4">
                         <div class="mb-3">
                             <strong>Активных потоков:</strong>
-                            <span class="badge bg-success ms-2">${stats.active_streams}</span>
+                            <span class="badge bg-success ms-2">${activeStreams}</span>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="mb-3">
                             <strong>Активных событий:</strong>
-                            <span class="badge bg-warning ms-2">${stats.event_stats.active_events}</span>
+                            <span class="badge bg-warning ms-2">${activeEvents}</span>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="mb-3">
                             <strong>Камер с историей:</strong>
-                            <span class="badge bg-info ms-2">${stats.event_stats.cameras_with_history}</span>
+                            <span class="badge bg-info ms-2">${camerasWithHistory}</span>
                         </div>
                     </div>
                 </div>
-                ${stats.streams.length > 0 ? `
+                ${streams.length > 0 ? `
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
@@ -104,28 +111,52 @@ async function loadSystemStatus() {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${stats.streams.map(stream => `
-                                    <tr>
-                                        <td>${stream.camera_id}</td>
-                                        <td>${stream.frame_count}</td>
-                                        <td>${stream.detection_count}</td>
-                                        <td>
-                                            <span class="badge bg-${stream.active ? 'success' : 'secondary'}">
-                                                ${stream.active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                `).join('')}
+                                ${streams.map(stream => {
+                                    if (!stream) return '';
+                                    const cameraId = stream.camera_id || 'N/A';
+                                    const frameCount = stream.frame_count || 0;
+                                    const detectionCount = stream.detection_count || 0;
+                                    const isActive = stream.active !== false;
+                                    return `
+                                        <tr>
+                                            <td>${cameraId}</td>
+                                            <td>${frameCount}</td>
+                                            <td>${detectionCount}</td>
+                                            <td>
+                                                <span class="badge bg-${isActive ? 'success' : 'secondary'}">
+                                                    ${isActive ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
                 ` : '<p class="text-muted text-center">Нет активных потоков</p>'}
             `;
+        } else {
+            // Handle case when data.success is false
+            const container = document.getElementById('system-status-details');
+            const errorMsg = data.message || 'Неизвестная ошибка';
+            container.innerHTML = `
+                <p class="text-warning text-center py-4">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    ${errorMsg}
+                </p>
+            `;
         }
     } catch (error) {
         console.error('Failed to load system status:', error);
-        document.getElementById('system-status-details').innerHTML = 
-            '<p class="text-danger text-center py-4">Ошибка загрузки статуса системы</p>';
+        const container = document.getElementById('system-status-details');
+        if (container) {
+            container.innerHTML = `
+                <p class="text-danger text-center py-4">
+                    <i class="fas fa-exclamation-circle"></i> 
+                    Ошибка загрузки статуса системы: ${error.message || 'Неизвестная ошибка'}
+                </p>
+            `;
+        }
     }
 }
 
