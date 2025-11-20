@@ -602,3 +602,181 @@ def send_test_detection():
         }), 500
 
 
+# ========== Diagnostics ==========
+
+@api_bp.route('/diagnostics/list-cameras', methods=['GET'])
+def list_cameras():
+    """List available cameras (optimized - checks only first 3 indices)."""
+    try:
+        import threading
+        import time
+        
+        cameras = []
+        lock = threading.Lock()
+        
+        def check_camera(index, timeout=1.5):
+            """Check single camera with timeout."""
+            try:
+                cap = cv2.VideoCapture(index)
+                # Set timeout properties
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1000)
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 500)
+                
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    can_read = ret and frame is not None
+                    frame_size = None
+                    if can_read:
+                        frame_size = {
+                            'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                            'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        }
+                    
+                    with lock:
+                        cameras.append({
+                            'index': index,
+                            'available': True,
+                            'can_read': can_read,
+                            'frame_size': frame_size
+                        })
+                    cap.release()
+            except Exception as e:
+                log_system('DEBUG', f'Camera {index} check failed: {str(e)}', 'api')
+        
+        # Check only first 3 camera indices in parallel
+        threads = []
+        for i in range(3):
+            t = threading.Thread(target=check_camera, args=(i,))
+            t.daemon = True
+            t.start()
+            threads.append(t)
+        
+        # Wait for all threads with timeout
+        for t in threads:
+            t.join(timeout=2.0)
+        
+        # Sort by index
+        cameras.sort(key=lambda x: x['index'])
+        
+        return jsonify({
+            'success': True,
+            'cameras': cameras
+        })
+    except Exception as e:
+        log_system('ERROR', f'Error listing cameras: {str(e)}', 'api')
+        return jsonify({
+            'success': False,
+            'message': str(e),
+            'cameras': []
+        }), 500
+
+
+@api_bp.route('/diagnostics/check-camera/<int:camera_index>', methods=['GET'])
+def check_camera_route(camera_index):
+    """Check if a specific camera is available (fast check)."""
+    try:
+        cap = cv2.VideoCapture(camera_index)
+        # Set timeouts for faster response
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1000)
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 500)
+        
+        available = cap.isOpened()
+        can_read = False
+        frame_size = None
+        
+        if available:
+            ret, frame = cap.read()
+            can_read = ret and frame is not None
+            if can_read:
+                frame_size = {
+                    'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                }
+            cap.release()
+        
+        return jsonify({
+            'success': True,
+            'available': available,
+            'can_read': can_read,
+            'frame_size': frame_size,
+            'message': 'Camera available' if available and can_read else 'Camera not available or cannot read frames'
+        })
+    except Exception as e:
+        log_system('ERROR', f'Error checking camera {camera_index}: {str(e)}', 'api')
+        return jsonify({
+            'success': False,
+            'available': False,
+            'can_read': False,
+            'message': str(e)
+        }), 500
+
+
+# ========== Quick Actions ==========
+
+@api_bp.route('/quick/quick-webcam', methods=['POST'])
+def quick_webcam():
+    """Quick create camera from webcam index and start detection."""
+    try:
+        from app.routes.detection import get_detector
+        
+        data = request.get_json()
+        camera_index = data.get('camera_index', 0)
+        camera_name = data.get('camera_name', f'Webcam {camera_index}')
+        
+        # Check if camera already exists with same source
+        existing = Camera.query.filter_by(
+            source=str(camera_index),
+            source_type='webcam'
+        ).first()
+        
+        if existing:
+            camera = existing
+            camera.name = camera_name  # Update name
+            db.session.commit()
+        else:
+            # Create new camera
+            camera = Camera(
+                name=camera_name,
+                source=str(camera_index),
+                source_type='webcam',
+                confidence_threshold=current_app.config.get('CONFIDENCE_THRESHOLD', 0.5),
+                is_active=False
+            )
+            db.session.add(camera)
+            db.session.commit()
+        
+        log_system('INFO', f'Quick webcam created: {camera.name}', 'api')
+        
+        # Try to start detection immediately
+        detector = get_detector()
+        detection_started = False
+        detection_error = None
+        
+        try:
+            detection_started = detector.start_stream(camera.id, camera.source, camera.source_type)
+            if detection_started:
+                camera.is_active = True
+                db.session.commit()
+                log_system('INFO', f'Detection started for {camera.name}', 'api')
+        except Exception as e:
+            detection_error = str(e)
+            log_system('WARNING', f'Could not start detection immediately: {detection_error}', 'api')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Camera created successfully',
+            'camera_id': camera.id,
+            'camera': camera.to_dict(),
+            'detection_started': detection_started,
+            'detection_error': detection_error
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        log_system('ERROR', f'Error creating quick webcam: {str(e)}', 'api')
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+

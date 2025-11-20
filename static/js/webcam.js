@@ -22,12 +22,39 @@ function initializeWebcamPage() {
         launchBtn.addEventListener('click', launchWebcam);
     }
 
-    // Auto-check cameras on page load
-    setTimeout(checkAvailableCameras, 500);
+    // Auto-check cameras on page load (fast check)
+    setTimeout(quickCheckCamera, 300);
 }
 
 /**
- * Check available cameras
+ * Quick camera check - auto-fill defaults
+ */
+function quickCheckCamera() {
+    const cameraNameInput = document.getElementById('camera-name');
+    const cameraIndexInput = document.getElementById('camera-index');
+    const resultDiv = document.getElementById('camera-check-result');
+    
+    // Auto-fill defaults
+    if (cameraIndexInput && !cameraIndexInput.value) {
+        cameraIndexInput.value = '0';
+    }
+    if (cameraNameInput && !cameraNameInput.value) {
+        cameraNameInput.value = 'Веб-камера';
+    }
+    
+    // Show ready message
+    if (resultDiv) {
+        resultDiv.innerHTML = `
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                <strong>Готово к подключению</strong> - нажмите "Запустить"
+            </div>
+        `;
+    }
+}
+
+/**
+ * Check available cameras (full check)
  */
 async function checkAvailableCameras() {
     const resultDiv = document.getElementById('camera-check-result');
@@ -40,10 +67,10 @@ async function checkAvailableCameras() {
             <span class="ms-2">Поиск камер...</span>
         </div>
     `;
-    checkBtn.disabled = true;
+    if (checkBtn) checkBtn.disabled = true;
 
     try {
-        const response = await window.app.apiRequest('/diagnostics/list-cameras');
+        const response = await window.app.apiRequest('/api/diagnostics/list-cameras');
 
         if (response.success && response.cameras.length > 0) {
             // Display available cameras
@@ -116,7 +143,7 @@ async function checkAvailableCameras() {
             </div>
         `;
     } finally {
-        checkBtn.disabled = false;
+        if (checkBtn) checkBtn.disabled = false;
     }
 }
 
@@ -144,23 +171,10 @@ async function launchWebcam() {
     statusDiv.innerHTML = '';
 
     try {
-        // Step 1: Check camera availability
-        updateLoadingMessage('Проверка доступности камеры...');
+        // Create camera and start detection in one go
+        updateLoadingMessage('Подключение к камере...');
         
-        const checkResponse = await window.app.apiRequest(`/diagnostics/check-camera/${cameraIndex}`);
-
-        if (!checkResponse.success || !checkResponse.available) {
-            throw new Error(checkResponse.message || 'Камера недоступна');
-        }
-
-        if (checkResponse.can_read === false) {
-            throw new Error('Камера не может читать кадры. Проверьте разрешения.');
-        }
-
-        // Step 2: Create/get camera
-        updateLoadingMessage('Добавление камеры в систему...');
-        
-        const createResponse = await window.app.apiRequest('/quick/quick-webcam', 'POST', {
+        const createResponse = await window.app.apiRequest('/api/quick/quick-webcam', 'POST', {
             camera_index: cameraIndex,
             camera_name: cameraName
         });
@@ -171,13 +185,15 @@ async function launchWebcam() {
 
         const cameraId = createResponse.camera_id;
 
-        // Step 3: Start detection
-        updateLoadingMessage('Запуск детекции...');
-        
-        const startResponse = await window.app.apiRequest(`/detection/start/${cameraId}`, 'POST');
+        // If detection wasn't started automatically, start it manually
+        if (!createResponse.detection_started) {
+            updateLoadingMessage('Запуск детекции...');
+            
+            const startResponse = await window.app.apiRequest(`/detection/start/${cameraId}`, 'POST');
 
-        if (!startResponse.success) {
-            throw new Error(startResponse.message || 'Не удалось запустить детекцию');
+            if (!startResponse.success) {
+                throw new Error(startResponse.message || 'Не удалось запустить детекцию');
+            }
         }
 
         // Step 4: Success - redirect

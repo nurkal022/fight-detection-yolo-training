@@ -6,18 +6,18 @@ class Config:
     SQLALCHEMY_DATABASE_URI = 'sqlite:///detection_system.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Model configuration - CHANGE THIS FOR YOUR MODEL
-    MODEL_PATH = os.environ.get('MODEL_PATH', 'yolo11n.pt')  # Default YOLO model
-    CONFIDENCE_THRESHOLD = 0.5
+    # Model configuration - Trained fight detection model
+    MODEL_PATH = os.environ.get('MODEL_PATH', 'fight_detection/fight_detection_yolo11n2/weights/best.pt')
+    CONFIDENCE_THRESHOLD = 0.65  # Increased to reduce false positives
     
-    # Detection classes - CONFIGURE YOUR CLASSES HERE
-    # Example: ['person', 'car', 'dog'] or class indices [0, 1, 2]
-    DETECTION_CLASSES = None  # None = all classes, or specify list of class names/indices
+    # Detection classes - Exclude neutral_class (8) from detection
+    # Only detect fight-related classes: 0-7
+    DETECTION_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7]  # Exclude neutral_class (8)
     
     # Event settings
-    EVENT_TYPE = os.environ.get('EVENT_TYPE', 'detection')  # Name for your detection type
-    EVENT_COOLDOWN = 5  # seconds between same events
-    EVENT_MIN_DURATION = 1  # minimum duration to log an event
+    EVENT_TYPE = os.environ.get('EVENT_TYPE', 'fight_detection')  # Name for your detection type
+    EVENT_COOLDOWN = 30  # seconds between same events (increased to reduce false positives)
+    EVENT_MIN_DURATION = 2  # minimum duration in seconds to log an event (increased)
     
     # Camera settings
     DEFAULT_CAMERA_INDEX = 0
@@ -34,12 +34,19 @@ class Config:
     
     # Alert settings
     ENABLE_ALERTS = True
-    ALERT_COOLDOWN = 30  # seconds between alerts for same camera
+    ALERT_COOLDOWN = 60  # seconds between alerts for same camera (increased)
     
     # Telegram notifications
     TELEGRAM_ENABLED = True
-    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8266725905:AAHXFOUpOOkv4lTNQw9JAH8CDpXuKGxNFZE')
-    TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '889928782')  # Single chat ID or comma-separated: "123,456,789"
+    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8237778300:AAEfUDpqzZkzfvoPtT3ukKYODpD33sxlZv4')
+    # Channel: @notifications_from_bot
+    # Chat ID: -1003207428650
+    # Multiple IDs: comma-separated "id1,id2,id3"
+    TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '-1003207428650')
+    
+    # False positive filtering
+    MIN_DETECTION_COUNT = 3  # Minimum number of detections in event to trigger notification
+    MIN_CONFIDENCE_FOR_ALERT = 0.5  # Minimum confidence to send Telegram alert
     
     # Logging
     LOG_LEVEL = 'INFO'

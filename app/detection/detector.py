@@ -16,7 +16,7 @@ class UniversalDetector:
     """
     
     def __init__(self, model_path, confidence_threshold=0.5, event_cooldown=5, 
-                 detection_classes=None, event_type='detection'):
+                 detection_classes=None, event_type='detection', min_duration=1):
         """
         Initialize the detector.
         
@@ -26,6 +26,7 @@ class UniversalDetector:
             event_cooldown: Seconds between logging duplicate events
             detection_classes: List of class names or indices to detect (None = all classes)
             event_type: Type of event to log (e.g., 'detection', 'intrusion', 'fight')
+            min_duration: Minimum duration in seconds to consider an event valid
         """
         self.model_path = model_path
         self.confidence_threshold = confidence_threshold
@@ -34,8 +35,10 @@ class UniversalDetector:
         
         # Load model
         try:
+            import torch
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.model = YOLO(model_path)
-            log_system('INFO', f'Model loaded successfully from {model_path}', 'detector')
+            log_system('INFO', f'Model loaded successfully from {model_path} (device: {device})', 'detector')
             
             # Get class names from model
             if hasattr(self.model, 'names'):
@@ -44,13 +47,15 @@ class UniversalDetector:
             else:
                 self.class_names = {}
                 log_system('WARNING', 'Could not get class names from model', 'detector')
+            
+            self.device = device
                 
         except Exception as e:
             log_system('ERROR', f'Failed to load model: {str(e)}', 'detector')
             raise
         
         # Event manager for deduplication
-        self.event_manager = EventManager(cooldown_seconds=event_cooldown)
+        self.event_manager = EventManager(cooldown_seconds=event_cooldown, min_duration=min_duration)
         
         # Active streams
         self.active_streams = {}  # camera_id -> stream_data
@@ -59,6 +64,14 @@ class UniversalDetector:
         
         # Frame buffers for serving to web
         self.frame_buffers = {}  # camera_id -> latest_frame
+        self.frame_timestamps = {}  # camera_id -> timestamp of last frame update
+        self.frame_buffer_locks = {}  # camera_id -> lock for frame buffer access
+        
+        # Last detections per camera (for smooth display without flickering)
+        self.last_detections = {}  # camera_id -> list of detections
+        
+        # Last original frames per camera (for drawing detections on latest frame)
+        self.last_original_frames = {}  # camera_id -> latest original frame
         
         # Detection callbacks
         self.callbacks = []
@@ -96,19 +109,87 @@ class UniversalDetector:
         
         return False
     
-    def detect_frame(self, frame, camera_id=None):
+    def _draw_detections_safe(self, frame, detections):
         """
-        Run detection on a single frame.
+        Draw bounding boxes on frame with safe boundary checking.
         
         Args:
             frame: Input frame (numpy array)
+            detections: List of detection dicts with 'bbox', 'class_name', 'confidence'
+            
+        Returns:
+            numpy array: Frame with drawn bounding boxes
+        """
+        annotated_frame = frame.copy()
+        h, w = frame.shape[:2]
+        
+        for det in detections:
+            bbox = det.get('bbox', [])
+            if len(bbox) != 4:
+                continue
+            
+            x1, y1, x2, y2 = bbox
+            
+            # Clamp coordinates to frame boundaries
+            x1 = max(0, min(int(x1), w - 1))
+            y1 = max(0, min(int(y1), h - 1))
+            x2 = max(0, min(int(x2), w - 1))
+            y2 = max(0, min(int(y2), h - 1))
+            
+            # Skip if box is invalid after clamping
+            if x2 <= x1 or y2 <= y1:
+                continue
+            
+            # Get class info
+            class_name = det.get('class_name', 'unknown')
+            confidence = det.get('confidence', 0.0)
+            
+            # Draw bounding box
+            color = (0, 255, 0)  # Green
+            thickness = 2
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, thickness)
+            
+            # Draw label with background
+            label = f'{class_name} {confidence:.2f}'
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            font_thickness = 2
+            
+            # Get text size
+            (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, font_thickness)
+            
+            # Draw background rectangle for text
+            text_x = x1
+            text_y = max(y1 - 10, text_height + 10)
+            cv2.rectangle(annotated_frame, 
+                          (text_x, text_y - text_height - 5), 
+                          (text_x + text_width, text_y + baseline), 
+                          (0, 0, 0), -1)
+            
+            # Draw text
+            cv2.putText(annotated_frame, label, (text_x, text_y), 
+                       font, font_scale, (255, 255, 255), font_thickness, cv2.LINE_AA)
+        
+        return annotated_frame
+    
+    def detect_frame(self, frame, camera_id=None):
+        """
+        Run detection on a single frame.
+        Optimized for performance.
+        
+        Args:
+            frame: Input frame (numpy array) - may be resized for performance
             camera_id: Optional camera ID for tracking
             
         Returns:
             tuple: (annotated_frame, detections_list, has_detection)
+            Note: annotated_frame is same size as input frame, detections bbox coordinates are in input frame coordinates
         """
-        # Run inference
-        results = self.model(frame, verbose=False)
+        original_frame = frame
+        
+        # Run inference (use device from initialization)
+        # Use imgsz=640 since frame is already resized to 640px width
+        results = self.model(frame, verbose=False, device=self.device, imgsz=640)
         
         # Parse results
         detections = []
@@ -140,11 +221,14 @@ class UniversalDetector:
                         max_confidence = conf
                         detected_class = class_name
                     
+                    # Get bbox coordinates (in frame coordinates)
+                    bbox_coords = box.xyxy[0].cpu().numpy().tolist()
+                    
                     detection = {
                         'class': cls,
                         'class_name': class_name,
                         'confidence': conf,
-                        'bbox': box.xyxy[0].cpu().numpy().tolist(),
+                        'bbox': bbox_coords,  # Coordinates in input frame size
                         'timestamp': datetime.utcnow().isoformat()
                     }
                     
@@ -155,28 +239,32 @@ class UniversalDetector:
                     
                     detections.append(detection)
         
-        # Get annotated frame
-        annotated_frame = results[0].plot() if len(results) > 0 else frame
+        # Get annotated frame with safe bounding box drawing
+        if len(detections) > 0:
+            # Use safe drawing function to prevent out-of-bounds errors
+            annotated_frame = self._draw_detections_safe(original_frame, detections)
+        else:
+            annotated_frame = original_frame
         
-        # Update event manager
+        # Update event manager (optimized - only copy frame when starting event)
         if camera_id is not None:
             if has_detection:
                 if not self.event_manager.is_event_active(camera_id):
-                    # Start new event
+                    # Start new event (copy frame only for event, not for update)
                     event_data = self.event_manager.start_event(
                         camera_id, 
                         max_confidence,
-                        annotated_frame.copy(),
+                        annotated_frame.copy() if annotated_frame is not None else None,
                         detected_class
                     )
                     if event_data:
                         log_system('INFO', f'{detected_class} detected on camera {camera_id}', 'detector')
                 else:
-                    # Update existing event
+                    # Update existing event (no frame copy to save time)
                     self.event_manager.update_event(
                         camera_id,
                         max_confidence,
-                        annotated_frame.copy(),
+                        None,  # Don't copy frame on every update
                         detected_class
                     )
             else:
@@ -251,6 +339,7 @@ class UniversalDetector:
             
             self.active_streams[camera_id] = stream_data
             self.stream_locks[camera_id] = threading.Lock()
+            self.frame_buffer_locks[camera_id] = threading.Lock()
             
             # Start processing thread
             thread = threading.Thread(
@@ -275,24 +364,37 @@ class UniversalDetector:
         Args:
             camera_id: Camera identifier
         """
+        import time
+        
         stream_data = self.active_streams[camera_id]
         cap = stream_data['capture']
         
         log_system('INFO', f'Processing thread started for camera {camera_id}', 'detector')
         
+        consecutive_failures = 0
+        max_failures = 10
+        
         while stream_data['active']:
             ret, frame = cap.read()
             
-            if not ret:
-                log_system('WARNING', f'Failed to read frame from camera {camera_id}', 'detector')
+            if not ret or frame is None:
+                consecutive_failures += 1
+                if consecutive_failures >= max_failures:
+                    log_system('ERROR', f'Too many consecutive failures reading from camera {camera_id}, stopping stream', 'detector')
+                    break
+                
+                log_system('WARNING', f'Failed to read frame from camera {camera_id} (attempt {consecutive_failures}/{max_failures})', 'detector')
                 # Try to reconnect for RTSP streams
                 if stream_data['source_type'] == 'rtsp':
                     cap.release()
+                    time.sleep(1)
                     cap = cv2.VideoCapture(stream_data['source'])
                     stream_data['capture'] = cap
-                    continue
                 else:
-                    break
+                    time.sleep(0.1)
+                continue
+            
+            consecutive_failures = 0  # Reset on success
             
             stream_data['frame_count'] += 1
             
@@ -300,15 +402,108 @@ class UniversalDetector:
             if stream_data['frame_count'] == 1:
                 log_system('INFO', f'First frame captured for camera {camera_id}, shape: {frame.shape}', 'detector')
             
-            # Run detection
-            annotated_frame, detections, has_detection = self.detect_frame(frame, camera_id)
+            # CRITICAL: Save original frame (before detection)
+            # This ensures smooth video even if detection is slow
+            self.last_original_frames[camera_id] = frame.copy()
             
-            if has_detection:
-                stream_data['detection_count'] += 1
+            # Draw last detections on current frame for smooth display (if available)
+            if camera_id in self.last_detections and len(self.last_detections[camera_id]) > 0:
+                display_frame = self._draw_detections_safe(frame, self.last_detections[camera_id])
+            else:
+                display_frame = frame
             
-            # Store latest frame for serving
-            with self.stream_locks[camera_id]:
-                self.frame_buffers[camera_id] = annotated_frame.copy()
+            # Update frame buffer immediately with lock for thread safety
+            with self.frame_buffer_locks[camera_id]:
+            self.frame_buffers[camera_id] = display_frame
+            self.frame_timestamps[camera_id] = time.time()
+            
+            # Run detection in background (non-blocking for frame updates)
+            try:
+                # Resize frame for faster detection if needed
+                detection_frame = frame.copy()  # Copy to avoid modifying original
+                scale_factor = 1.0
+                if frame.shape[1] > 640:
+                    scale_factor = 640 / frame.shape[1]
+                    detection_frame = cv2.resize(detection_frame, (640, int(frame.shape[0] * scale_factor)))
+                
+                # Run detection (this may take time, but frame buffer already updated)
+                annotated_frame, detections, has_detection = self.detect_frame(detection_frame, camera_id)
+                
+                # Scale detections back to original frame size if frame was resized
+                scaled_detections = []
+                if has_detection:
+                    for det in detections:
+                        scaled_det = det.copy()
+                        if 'bbox' in scaled_det and len(scaled_det['bbox']) == 4:
+                            # Scale bbox coordinates back to original frame size
+                            scaled_det['bbox'] = [coord / scale_factor for coord in scaled_det['bbox']]
+                        scaled_detections.append(scaled_det)
+                    
+                    # Save scaled detections for future frames
+                    self.last_detections[camera_id] = scaled_detections
+                    stream_data['detection_count'] += 1
+                    
+                    # Update frame buffer with new detections on latest original frame
+                    # Use last saved original frame (may be newer than the one used for detection)
+                    latest_original = self.last_original_frames.get(camera_id, frame)
+                    display_frame_with_detections = self._draw_detections_safe(latest_original, scaled_detections)
+                    
+                    with self.frame_buffer_locks[camera_id]:
+                    self.frame_buffers[camera_id] = display_frame_with_detections
+                    self.frame_timestamps[camera_id] = time.time()
+                else:
+                    # No detections - clear saved detections
+                    if camera_id in self.last_detections:
+                        self.last_detections[camera_id] = []
+                
+                # Check for event timeouts (auto-end long-running events) - only every 30 frames to reduce overhead
+                if stream_data['frame_count'] % 30 == 0 and self.event_manager.is_event_active(camera_id):
+                    timeout_event = self.event_manager.check_timeout(camera_id, timeout_seconds=3, max_duration=10)
+                    if timeout_event:
+                        # Trigger callback for timed-out event (in separate thread to not block)
+                        import threading
+                        def send_timeout_event():
+                            self._trigger_callbacks({
+                                'camera_id': camera_id,
+                                'event_type': self.event_type,
+                                'detected_class': timeout_event.get('detected_class', 'unknown'),
+                                'confidence': timeout_event['max_confidence'],
+                                'start_time': timeout_event['start_time'],
+                                'end_time': timeout_event['end_time'],
+                                'duration': timeout_event['duration'],
+                                'frame': timeout_event['best_frame'],
+                                'detection_count': timeout_event['detection_count']
+                            })
+                        threading.Thread(target=send_timeout_event, daemon=True).start()
+                        log_system('INFO', f'Event auto-ended on camera {camera_id} (timeout), duration: {timeout_event["duration"]:.2f}s', 'detector')
+            except Exception as e:
+                log_system('ERROR', f'Error processing frame for camera {camera_id}: {str(e)}', 'detector')
+                import traceback
+                log_system('ERROR', f'Traceback: {traceback.format_exc()}', 'detector')
+                # On error, still update frame buffer with original frame
+                with self.frame_buffer_locks[camera_id]:
+                self.frame_buffers[camera_id] = frame
+                self.frame_timestamps[camera_id] = time.time()
+                time.sleep(0.001)
+            
+            # Minimal delay to prevent CPU overload but maintain smooth FPS
+            time.sleep(0.001)
+        
+        # End any active events before cleanup
+        if self.event_manager.is_event_active(camera_id):
+            final_event = self.event_manager.end_event(camera_id)
+            if final_event:
+                self._trigger_callbacks({
+                    'camera_id': camera_id,
+                    'event_type': self.event_type,
+                    'detected_class': final_event.get('detected_class', 'unknown'),
+                    'confidence': final_event['max_confidence'],
+                    'start_time': final_event['start_time'],
+                    'end_time': final_event['end_time'],
+                    'duration': final_event['duration'],
+                    'frame': final_event['best_frame'],
+                    'detection_count': final_event['detection_count']
+                })
         
         # Clean up
         cap.release()
@@ -337,8 +532,12 @@ class UniversalDetector:
             del self.active_streams[camera_id]
         if camera_id in self.frame_buffers:
             del self.frame_buffers[camera_id]
+        if camera_id in self.frame_timestamps:
+            del self.frame_timestamps[camera_id]
         if camera_id in self.stream_locks:
             del self.stream_locks[camera_id]
+        if camera_id in self.frame_buffer_locks:
+            del self.frame_buffer_locks[camera_id]
         
         # Reset event manager
         self.event_manager.reset_camera(camera_id)
@@ -349,18 +548,31 @@ class UniversalDetector:
     def get_latest_frame(self, camera_id):
         """
         Get the latest processed frame for a camera.
+        Thread-safe with minimal blocking - copies frame quickly.
         
         Args:
             camera_id: Camera identifier
             
         Returns:
-            numpy array: Latest frame or None
+            numpy array: Latest frame copy or None
         """
         if camera_id not in self.frame_buffers:
             return None
         
-        with self.stream_locks[camera_id]:
-            return self.frame_buffers[camera_id].copy()
+        if camera_id not in self.frame_buffer_locks:
+            return None
+        
+        try:
+            # Get frame with lock - copy immediately to minimize lock time
+            with self.frame_buffer_locks[camera_id]:
+            frame = self.frame_buffers.get(camera_id)
+            if frame is not None:
+                    # Copy immediately while holding lock (fast operation)
+                return frame.copy()
+            return None
+        except Exception as e:
+            # Return None on any error to prevent blocking
+            return None
     
     def get_stream_stats(self, camera_id):
         """Get statistics for a stream."""

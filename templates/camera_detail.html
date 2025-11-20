@@ -52,12 +52,11 @@
                     </div>
                 </div>
                 <div class="card-body p-0 bg-dark">
-                    <div class="video-container" style="position: relative; min-height: 400px;">
+                    <div class="video-container">
                         {% if camera.is_active %}
                         <img id="video-stream" 
                              src="{{ url_for('detection.stream', camera_id=camera.id) }}" 
-                             class="img-fluid w-100"
-                             style="display: block;"
+                             class="camera-stream"
                              alt="Camera stream">
                         {% else %}
                         <div class="text-center text-white p-5">

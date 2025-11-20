@@ -15,14 +15,21 @@ class TelegramNotifier:
     def is_ready(self) -> bool:
         return bool(self.enabled and self.bot_token and self.chat_id)
 
-    def send_message(self, text: str) -> bool:
-        if not self.is_ready():
+    def send_message(self, text: str, chat_id: str | None = None) -> bool:
+        """Send message to chat_id or default chat_id."""
+        if not self.enabled or not self.bot_token:
             log_system('WARNING', 'Telegram not configured or disabled', 'telegram')
             return False
+        
+        target_chat_id = chat_id or self.chat_id
+        if not target_chat_id:
+            log_system('WARNING', 'No chat_id provided', 'telegram')
+            return False
+        
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
             resp = requests.post(url, json={
-                'chat_id': self.chat_id,
+                'chat_id': target_chat_id,
                 'text': text,
                 'parse_mode': 'HTML'
             }, timeout=10)
@@ -33,6 +40,23 @@ class TelegramNotifier:
         except Exception as e:
             log_system('ERROR', f'Telegram send_message exception: {str(e)}', 'telegram')
             return False
+    
+    def send_message_to_multiple(self, text: str, chat_ids: list) -> dict:
+        """Send message to multiple chat_ids. Returns dict with results."""
+        results = {'success': 0, 'failed': 0, 'errors': []}
+        
+        if not self.enabled or not self.bot_token:
+            log_system('WARNING', 'Telegram not configured or disabled', 'telegram')
+            return results
+        
+        for chat_id in chat_ids:
+            if self.send_message(text, chat_id):
+                results['success'] += 1
+            else:
+                results['failed'] += 1
+                results['errors'].append(chat_id)
+        
+        return results
 
     def send_photo(self, photo_path: str, caption: str | None = None) -> bool:
         if not self.is_ready():

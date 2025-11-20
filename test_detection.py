@@ -64,8 +64,10 @@ def test_model():
         if not ret:
             break
         
-        # Run detection on GPU
-        results = model(frame, verbose=False, device='cuda')
+        # Run detection (auto-detect device: CUDA if available, else CPU)
+        import torch
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        results = model(frame, verbose=False, device=device)
         
         # Get annotated frame
         annotated_frame = results[0].plot()

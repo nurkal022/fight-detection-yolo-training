@@ -27,6 +27,9 @@ class EventManager:
         # Track event start times
         self.event_start_times = {}  # camera_id -> start_time
         
+        # Track last detection time for timeout
+        self.last_detection_time = {}  # camera_id -> last_detection_time
+        
         # Thread lock for thread-safe operations
         self.lock = threading.Lock()
     
@@ -67,6 +70,8 @@ class EventManager:
             dict: Event data if started, None otherwise
         """
         with self.lock:
+            current_time = datetime.utcnow()
+            
             if camera_id in self.active_events:
                 # Event already active, update confidence if higher
                 if confidence > self.active_events[camera_id]['max_confidence']:
@@ -75,10 +80,12 @@ class EventManager:
                         self.active_events[camera_id]['best_frame'] = frame_data
                     if detected_class:
                         self.active_events[camera_id]['detected_class'] = detected_class
+                # Update last detection time
+                self.last_detection_time[camera_id] = current_time
+                self.active_events[camera_id]['detection_count'] += 1
                 return None
             
             # Start new event
-            current_time = datetime.utcnow()
             event_data = {
                 'camera_id': camera_id,
                 'start_time': current_time,
@@ -90,6 +97,7 @@ class EventManager:
             
             self.active_events[camera_id] = event_data
             self.event_start_times[camera_id] = current_time
+            self.last_detection_time[camera_id] = current_time
             
             return event_data
     
@@ -107,7 +115,9 @@ class EventManager:
             if camera_id not in self.active_events:
                 return
             
+            current_time = datetime.utcnow()
             self.active_events[camera_id]['detection_count'] += 1
+            self.last_detection_time[camera_id] = current_time
             
             # Update best confidence and frame
             if confidence > self.active_events[camera_id]['max_confidence']:
@@ -140,6 +150,8 @@ class EventManager:
             # Clean up
             del self.active_events[camera_id]
             del self.event_start_times[camera_id]
+            if camera_id in self.last_detection_time:
+                del self.last_detection_time[camera_id]
             
             # Check if event meets minimum duration
             if duration < self.min_duration:
@@ -158,13 +170,14 @@ class EventManager:
             
             return event_data
     
-    def check_timeout(self, camera_id, timeout_seconds=3):
+    def check_timeout(self, camera_id, timeout_seconds=5, max_duration=10):
         """
-        Check if an active event has timed out (no detections for timeout period).
+        Check if an active event has timed out or exceeded max duration.
         
         Args:
             camera_id: ID of the camera/source
             timeout_seconds: Seconds without detection to consider event ended
+            max_duration: Maximum duration before forcing event end
             
         Returns:
             dict: Event data if timed out, None otherwise
@@ -173,15 +186,20 @@ class EventManager:
             if camera_id not in self.active_events:
                 return None
             
-            start_time = self.event_start_times[camera_id]
             current_time = datetime.utcnow()
-            
-            # For simplicity, we'll end the event if it's been going for a while
-            # In practice, you'd track the last detection time
+            start_time = self.event_start_times[camera_id]
             duration = (current_time - start_time).total_seconds()
             
-            if duration > timeout_seconds:
+            # Force end if exceeded max duration (to prevent events from running forever)
+            if duration >= max_duration:
                 return self.end_event(camera_id)
+            
+            # Check if no detections for timeout period
+            last_detection = self.last_detection_time.get(camera_id)
+            if last_detection:
+                time_since_last = (current_time - last_detection).total_seconds()
+                if time_since_last >= timeout_seconds:
+                    return self.end_event(camera_id)
             
             return None
     
@@ -204,6 +222,8 @@ class EventManager:
                 del self.event_start_times[camera_id]
             if camera_id in self.last_event_time:
                 del self.last_event_time[camera_id]
+            if camera_id in self.last_detection_time:
+                del self.last_detection_time[camera_id]
     
     def get_statistics(self):
         """Get current statistics."""
