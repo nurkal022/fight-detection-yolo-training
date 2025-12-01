@@ -79,3 +79,6 @@ yolo_dataset/labels/*.cache
 # OS
 Thumbs.db
 
+# Dataset (large files)
+dataset/
+
