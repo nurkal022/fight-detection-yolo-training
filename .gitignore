@@ -37,12 +37,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Flask/Database
+# Flask
 instance/
 .webassets-cache
-*.db
-*.sqlite
-*.sqlite3
 
 # Logs
 *.log
@@ -50,20 +47,14 @@ logs/
 web/logs/
 appLive/logs/
 
-# YOLO models (большие файлы ~40MB+)
-*.pt
-*.onnx
-*.torchscript
-*.pth
-
-# YOLO training results
+# YOLO training results (runs folder)
 runs/
 
 # YOLO dataset cache
 *.cache
 
-# Dataset images (большие файлы ~170MB)
-yolo_dataset/images/
+# Dataset (удален из git)
+yolo_dataset/
 datasetCollector/images/
 dataset/
 
