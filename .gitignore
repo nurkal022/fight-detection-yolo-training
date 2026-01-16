@@ -24,7 +24,7 @@ wheels/
 venv/
 env/
 ENV/
-.venv
+.venv/
 
 # IDE
 .vscode/
@@ -32,13 +32,14 @@ ENV/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Flask
+# OS
+.DS_Store
+Thumbs.db
+
+# Flask/Database
 instance/
 .webassets-cache
-
-# Database
 *.db
 *.sqlite
 *.sqlite3
@@ -46,39 +47,37 @@ instance/
 # Logs
 *.log
 logs/
-app/logs/
+web/logs/
+appLive/logs/
 
-# YOLO training results (большие файлы)
-fight_detection/
-runs/
+# YOLO models (большие файлы ~40MB+)
 *.pt
 *.onnx
 *.torchscript
+*.pth
+
+# YOLO training results
+runs/
 
 # YOLO dataset cache
 *.cache
-yolo_dataset/labels/*.cache
+
+# Dataset images (большие файлы ~170MB)
+yolo_dataset/images/
+datasetCollector/images/
+dataset/
+
+# Event snapshots (автоматически создаются)
+appLive/events/
+web/static/events/
 
 # Временные файлы
 *.tmp
 *.bak
-*.swp
-
-# Модели (если нужно, раскомментируйте)
-# *.pt
-# *.pth
-# *.h5
 
 # Jupyter Notebook
-.ipynb_checkpoints
+.ipynb_checkpoints/
 
 # Environment variables
 .env
 .env.local
-
-# OS
-Thumbs.db
-
-# Dataset (large files)
-dataset/
-

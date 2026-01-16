@@ -6,7 +6,7 @@ Usage:
 1. Add bot to your channel/group as administrator
 2. Send a message to the channel/group
 3. Run this script with your bot token
-4. Copy the chat_id and add it to app/config.py
+4. Copy the chat_id and add it to web/app.py (Config class) or set TELEGRAM_CHAT_ID environment variable
 """
 
 import sys
@@ -53,10 +53,12 @@ def get_chat_id(bot_token):
                     print()
         
         if chat_ids:
-            print("✅ Use one of these Chat IDs in app/config.py:")
+            print("✅ Use one of these Chat IDs in web/app.py (Config class) or as environment variable:")
             print(f"   TELEGRAM_CHAT_ID = '{list(chat_ids)[0]}'")
             if len(chat_ids) > 1:
                 print(f"\n   Or multiple: TELEGRAM_CHAT_ID = '{','.join(map(str, chat_ids))}'")
+            print("\n   Or set environment variable:")
+            print(f"   export TELEGRAM_CHAT_ID='{list(chat_ids)[0]}'")
         
         return list(chat_ids)[0] if chat_ids else None
         

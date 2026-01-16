@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+
+{% block title %}Прямой эфир - Детекция Драк{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-video"></i> Прямой эфир</h1>
+    </div>
+    <div class="col-auto">
+        <span id="status-badge" class="badge bg-secondary status-badge">
+            <i class="fas fa-circle"></i> Загрузка...
+        </span>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Video Feed -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-camera"></i> Видео поток</h5>
+                <div>
+                    <button class="btn btn-success btn-sm" id="btn-start" onclick="startDetection(); return false;">
+                        <i class="fas fa-play"></i> Запустить
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="btn-stop" onclick="stopDetection(); return false;" disabled>
+                        <i class="fas fa-stop"></i> Остановить
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="video-container">
+                    <img src="/video_feed" alt="Видео поток" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Stats & Detections -->
+    <div class="col-lg-4">
+        <!-- Stats -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Статистика</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h3 id="stat-fps" class="text-success mb-0">0</h3>
+                        <small class="text-muted">FPS</small>
+                    </div>
+                    <div class="col-4">
+                        <h3 id="stat-detections" class="text-info mb-0">0</h3>
+                        <small class="text-muted">Детекций</small>
+                    </div>
+                    <div class="col-4">
+                        <h3 id="stat-alerts" class="text-danger mb-0">0</h3>
+                        <small class="text-muted">Алертов</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Active Events -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Активные события</h5>
+            </div>
+            <div class="card-body p-0" id="active-events" style="max-height: 200px; overflow-y: auto;">
+                <p class="text-muted text-center py-3 mb-0">Нет активных событий</p>
+            </div>
+        </div>
+        
+        <!-- Live Detections -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-eye"></i> Детекции в реальном времени</h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="live-detections" style="max-height: 300px; overflow-y: auto;">
+                    <p class="text-muted text-center py-3">Ожидание детекций...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+<script>
+    // CLASS_NAMES_RU уже определен в base.html, не дублируем
+    
+    // Хранилище детекций для систематизации
+    const detectionsMap = new Map(); // class_name -> {count, lastTime, maxConf, firstTime}
+    const DEDUP_INTERVAL = 2000; // 2 секунды для объединения одинаковых детекций
+    
+    window.checkCamera = function() {
+        fetch('/api/diagnostics/camera')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.available || !data.can_read) {
+                    const errorMsg = data.error || 'Камера недоступна';
+                    console.error('Camera error:', errorMsg);
+                    // Показываем предупреждение, но не блокируем
+                    if (data.error) {
+                        console.warn('Camera diagnostic:', data);
+                    }
+                }
+            })
+            .catch(console.error);
+    }
+    
+    window.startDetection = function() {
+        console.log('startDetection called');
+        const btn = document.getElementById('btn-start');
+        if (btn.disabled) {
+            console.log('Button already disabled');
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Запуск...';
+        
+        fetch('/api/start', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(r => {
+                console.log('Response status:', r.status);
+                if (!r.ok) {
+                    throw new Error(`HTTP ${r.status}`);
+                }
+                return r.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-start').innerHTML = '<i class="fas fa-play"></i> Запустить';
+                    document.getElementById('btn-stop').disabled = false;
+                    console.log('Detection started successfully');
+                } else {
+                    const msg = data.message || 'Неизвестная ошибка';
+                    alert('Ошибка запуска: ' + msg + '\n\nПроверьте логи на странице /logs');
+                    console.error('Start detection failed:', data);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-play"></i> Запустить';
+                }
+            })
+            .catch(error => {
+                console.error('Start detection exception:', error);
+                alert('Ошибка при запуске детекции: ' + error.message + '\n\nПроверьте консоль браузера (F12)');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play"></i> Запустить';
+            });
+    }
+    
+    window.stopDetection = function() {
+        fetch('/api/stop', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('btn-start').disabled = false;
+                document.getElementById('btn-stop').disabled = true;
+            });
+    }
+    
+    window.formatDuration = function(seconds) {
+        if (seconds < 60) return Math.round(seconds) + 'с';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return `${mins}м ${secs}с`;
+    }
+    
+    window.updateActiveEvents = function(events) {
+        const activeDiv = document.getElementById('active-events');
+        
+        if (!events || events.length === 0) {
+            activeDiv.innerHTML = '<p class="text-muted text-center py-3 mb-0">Нет активных событий</p>';
+            return;
+        }
+        
+        let html = '<div class="list-group list-group-flush">';
+        events.forEach(event => {
+                    const className = (window.CLASS_NAMES_RU && window.CLASS_NAMES_RU[event.class_name]) || event.class_name;
+            const duration = formatDuration(event.duration);
+            const confPercent = Math.round(event.max_confidence * 100);
+            
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">
+                                <span class="badge bg-danger">${className}</span>
+                            </h6>
+                            <small class="text-muted">
+                                Уверенность: <strong>${confPercent}%</strong><br>
+                                Длительность: <strong>${duration}</strong><br>
+                                Детекций: <strong>${event.detection_count}</strong>
+                            </small>
+                        </div>
+                        <small class="text-muted">${duration}</small>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        activeDiv.innerHTML = html;
+    }
+    
+    window.addDetection = function(detection) {
+        const className = detection.class_name;
+        const now = Date.now();
+        
+        // Объединение одинаковых детекций
+        if (detectionsMap.has(className)) {
+            const existing = detectionsMap.get(className);
+            if (now - existing.lastTime < DEDUP_INTERVAL) {
+                // Объединяем с существующей
+                existing.count++;
+                existing.lastTime = now;
+                existing.maxConf = Math.max(existing.maxConf, detection.confidence);
+                updateDetectionsDisplay();
+                return;
+            }
+        }
+        
+        // Новая детекция
+        detectionsMap.set(className, {
+            count: 1,
+            lastTime: now,
+            firstTime: now,
+            maxConf: detection.confidence
+        });
+        
+        // Удаляем старые (старше 10 секунд)
+        for (const [key, value] of detectionsMap.entries()) {
+            if (now - value.lastTime > 10000) {
+                detectionsMap.delete(key);
+            }
+        }
+        
+        updateDetectionsDisplay();
+    }
+    
+    window.updateDetectionsDisplay = function() {
+        const detectionsDiv = document.getElementById('live-detections');
+        const now = Date.now();
+        
+        if (detectionsMap.size === 0) {
+            detectionsDiv.innerHTML = '<p class="text-muted text-center py-3">Ожидание детекций...</p>';
+            return;
+        }
+        
+        // Сортируем по времени (новые сверху)
+        const sorted = Array.from(detectionsMap.entries())
+            .sort((a, b) => b[1].lastTime - a[1].lastTime);
+        
+        let html = '<div class="list-group list-group-flush">';
+        sorted.forEach(([className, data]) => {
+            const classNameRu = (window.CLASS_NAMES_RU && window.CLASS_NAMES_RU[className]) || className;
+            const duration = Math.round((now - data.firstTime) / 1000);
+            const confPercent = Math.round(data.maxConf * 100);
+            const timeAgo = Math.round((now - data.lastTime) / 1000);
+            
+            html += `
+                <div class="detection-entry">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong class="detection-class">${classNameRu}</strong>
+                            <div class="small text-muted">
+                                Уверенность: <span class="detection-conf">${confPercent}%</span><br>
+                                Количество: <strong>${data.count}</strong> | 
+                                Длительность: <strong>${formatDuration(duration)}</strong>
+                            </div>
+                        </div>
+                        <small class="text-muted">${timeAgo}с назад</small>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        detectionsDiv.innerHTML = html;
+    }
+    
+    window.checkStatus = function() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                console.log('Status update:', data);
+                
+                if (data.running) {
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-start').innerHTML = '<i class="fas fa-play"></i> Запустить';
+                    document.getElementById('btn-stop').disabled = false;
+                } else {
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-start').innerHTML = '<i class="fas fa-play"></i> Запустить';
+                    document.getElementById('btn-stop').disabled = true;
+                }
+                
+                // Обновляем статистику
+                if (document.getElementById('stat-fps')) {
+                    document.getElementById('stat-fps').textContent = data.fps || 0;
+                }
+                if (document.getElementById('stat-detections')) {
+                    document.getElementById('stat-detections').textContent = data.total_detections || 0;
+                }
+                if (document.getElementById('stat-alerts')) {
+                    document.getElementById('stat-alerts').textContent = data.total_alerts || 0;
+                }
+            })
+            .catch(error => {
+                console.error('Status check error:', error);
+            });
+        
+        // Получаем активные события с деталями
+        fetch('/api/active-events')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.events) {
+                    updateActiveEvents(data.events);
+                } else {
+                    const activeDiv = document.getElementById('active-events');
+                    activeDiv.innerHTML = '<p class="text-muted text-center py-3 mb-0">Нет активных событий</p>';
+                }
+            })
+            .catch(() => {});
+    }
+    
+    // Обработка детекций через WebSocket
+    if (typeof socket !== 'undefined') {
+        socket.on('detection', (data) => {
+            if (typeof addDetection === 'function') {
+                addDetection(data);
+            }
+        });
+    }
+    
+    // Проверяем камеру при загрузке
+    checkCamera();
+    
+    checkStatus();
+    setInterval(checkStatus, 2000);
+    setInterval(updateDetectionsDisplay, 1000);
+</script>
+{% endblock %}

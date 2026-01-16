@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Детекция Драк{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; color: #212529; }
+        .navbar { background-color: #343a40 !important; }
+        .card { background-color: #ffffff; border: 1px solid #dee2e6; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); }
+        .card-header { background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; font-weight: 600; }
+        .table { color: #212529; }
+        .table-striped tbody tr:nth-of-type(odd) { background-color: rgba(0,0,0,0.02); }
+        .btn-primary { background-color: #0d6efd; border-color: #0d6efd; }
+        .btn-danger { background-color: #dc3545; border-color: #dc3545; }
+        .btn-success { background-color: #198754; border-color: #198754; }
+        .video-container { background-color: #000; border-radius: 8px; overflow: hidden; }
+        .video-container img { width: 100%; height: auto; }
+        .detection-entry { padding: 8px 12px; border-bottom: 1px solid #e9ecef; font-size: 0.9rem; }
+        .detection-entry:last-child { border-bottom: none; }
+        .detection-class { font-weight: 600; color: #dc3545; }
+        .detection-conf { color: #0d6efd; }
+        .stat-card { text-align: center; padding: 20px; }
+        .stat-card h2 { font-size: 2.5rem; margin: 0; }
+        .stat-card p { margin: 0; color: #6c757d; }
+        .status-badge { font-size: 1rem; }
+        .event-frame { max-width: 150px; border-radius: 4px; }
+        #live-detections { max-height: 400px; overflow-y: auto; background-color: #f8f9fa; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .badge { font-weight: 500; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt"></i> Детекция Драк
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="/">
+                    <i class="fas fa-home"></i> Панель управления
+                </a>
+                <a class="nav-link {% if request.endpoint == 'live' %}active{% endif %}" href="/live">
+                    <i class="fas fa-video"></i> Прямой эфир
+                </a>
+                <a class="nav-link {% if request.endpoint == 'events' %}active{% endif %}" href="/events">
+                    <i class="fas fa-bell"></i> События
+                </a>
+                <a class="nav-link {% if request.endpoint == 'logs' %}active{% endif %}" href="/logs">
+                    <i class="fas fa-file-alt"></i> Логи
+                </a>
+                <a class="nav-link {% if request.endpoint == 'statistics' %}active{% endif %}" href="/statistics">
+                    <i class="fas fa-chart-line"></i> Статистика
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Глобальные переменные и функции
+        const socket = io();
+        window.CLASS_NAMES_RU = {
+            'bent_over': 'Наклон вперед',
+            'covering_face': 'Закрытие лица',
+            'face_slap': 'Удар по лицу',
+            'fist_clenching': 'Сжатие кулака',
+            'hair_clothes_drag': 'Таскание за волосы',
+            'head_down': 'Опущенная голова',
+            'head_slap_back': 'Удар по затылку',
+            'neck_grab': 'Захват за шею',
+            'neutral_class': 'Нейтральный'
+        };
+        
+        socket.on('connect', () => {
+            console.log('Подключено к серверу');
+        });
+        
+        socket.on('event', (data) => {
+            console.log('Событие:', data);
+            showNotification(data);
+        });
+        
+        // socket.on('detection') обрабатывается в live.html с систематизацией
+        
+        window.showNotification = function(event) {
+            const toast = document.createElement('div');
+            toast.className = 'position-fixed top-0 end-0 p-3';
+            toast.style.zIndex = '9999';
+            const className = CLASS_NAMES_RU[event.class_name] || event.class_name;
+            toast.innerHTML = `
+                <div class="toast show bg-danger text-white">
+                    <div class="toast-header bg-danger text-white">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong class="me-auto">Алерт: ${className}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">
+                        Уверенность: ${Math.round(event.confidence * 100)}%<br>
+                        Длительность: ${event.duration.toFixed(1)}с
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+        
+        window.updateStatus = function() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    const statusEl = document.getElementById('status-badge');
+                    if (statusEl) {
+                        if (data.running) {
+                            statusEl.className = 'badge bg-success status-badge';
+                            statusEl.innerHTML = '<i class="fas fa-circle pulse"></i> Работает';
+                        } else {
+                            statusEl.className = 'badge bg-secondary status-badge';
+                            statusEl.innerHTML = '<i class="fas fa-circle"></i> Остановлено';
+                        }
+                    }
+                    
+                    // Обновляем статистику
+                    const fpsEl = document.getElementById('stat-fps');
+                    const detectionsEl = document.getElementById('stat-detections');
+                    const alertsEl = document.getElementById('stat-alerts');
+                    
+                    if (fpsEl) fpsEl.textContent = data.fps;
+                    if (detectionsEl) detectionsEl.textContent = data.total_detections;
+                    if (alertsEl) alertsEl.textContent = data.total_alerts;
+                })
+                .catch(console.error);
+        }
+        
+        setInterval(updateStatus, 1000);
+        updateStatus();
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

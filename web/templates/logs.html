@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Логи - Детекция Драк{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-file-alt"></i> Системные логи</h1>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group">
+            <a href="/logs" class="btn btn-outline-primary btn-sm {% if not request.args.get('level') %}active{% endif %}">Все</a>
+            <a href="/logs?level=INFO" class="btn btn-outline-info btn-sm {% if request.args.get('level') == 'INFO' %}active{% endif %}">INFO</a>
+            <a href="/logs?level=WARNING" class="btn btn-outline-warning btn-sm {% if request.args.get('level') == 'WARNING' %}active{% endif %}">WARNING</a>
+            <a href="/logs?level=ERROR" class="btn btn-outline-danger btn-sm {% if request.args.get('level') == 'ERROR' %}active{% endif %}">ERROR</a>
+        </div>
+    </div>
+</div>
+
+<!-- Historical Logs -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-history"></i> История логов ({{ logs|length }} записей)</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if logs %}
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+            <table class="table table-sm mb-0">
+                <thead class="table-light" style="position: sticky; top: 0;">
+                    <tr>
+                        <th style="width: 180px;">Время</th>
+                        <th style="width: 80px;">Уровень</th>
+                        <th style="width: 100px;">Модуль</th>
+                        <th>Сообщение</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td><code>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</code></td>
+                        <td>
+                            <span class="badge bg-{{ 'info' if log.level == 'INFO' else 'warning' if log.level == 'WARNING' else 'danger' }}">
+                                {{ log.level }}
+                            </span>
+                        </td>
+                        <td><code>{{ log.module or '-' }}</code></td>
+                        <td>{{ log.message }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-file fa-4x text-muted mb-3"></i>
+            <h4 class="text-muted">Логов пока нет</h4>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
